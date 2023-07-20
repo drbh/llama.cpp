@@ -313,11 +313,21 @@ struct llama_server_context
         has_next_token = true;
     }
 
+    void* grammar = nullptr;
+
     void beginCompletion()
     {
         // number of tokens to keep when resetting context
         n_remain = params.n_predict;
         llama_set_rng_seed(ctx, params.seed);
+
+        // load input from params.validator_path
+        std::string token_grammar_path = params.token_grammar_path;
+        if (!token_grammar_path.empty()) {
+            // fprintf(stderr, "%s: attempting to parse token grammar from '%s'\n", __func__, token_grammar_path.c_str());
+            grammar = llama_load_token_grammar_from_path(token_grammar_path.c_str());
+        }
+
     }
 
     completion_token_output nextToken()
@@ -406,7 +416,10 @@ struct llama_server_context
 
             llama_token_data_array candidates_p = {candidates.data(), candidates.size(), false};
 
-            // Apply penalties
+            // Apply penalties 
+            fprintf(stderr, "pre llama_grammar_penalty:\t%ld\n", time(NULL));
+            llama_grammar_penalty(ctx, &candidates_p, grammar);
+            fprintf(stderr, "pst llama_grammar_penalty:\t%ld\n", time(NULL));
             float nl_logit = logits[llama_token_nl()];
             auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), params.n_ctx);
             llama_sample_repetition_penalty(ctx, &candidates_p,
@@ -463,7 +476,10 @@ struct llama_server_context
             }
             last_n_tokens.erase(last_n_tokens.begin());
             last_n_tokens.push_back(result.tok);
+            fprintf(stderr, "pre llama_grammar_accept_token:\t%ld\n", time(NULL));
+            llama_grammar_accept_token(ctx, result.tok, grammar);
             num_tokens_predicted++;
+            fprintf(stderr, "pst llama_grammar_accept_token:\t%ld\n", time(NULL));
         }
 
         // add it to the context
@@ -753,7 +769,14 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.n_threads = std::stoi(argv[i]);
         }
-        else if (arg == "-b" || arg == "--batch-size")
+        else if (arg == "--grammar") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.token_grammar_path = argv[i];
+        }
+        else if (arg == "-b" || arg == "--batch_size")
         {
             if (++i >= argc)
             {

@@ -391,6 +391,10 @@ extern "C" {
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
     LLAMA_API void llama_reset_timings(struct llama_context * ctx);
 
+    void* llama_load_token_grammar_from_path(const char *path);
+    LLAMA_API void llama_grammar_penalty(struct llama_context * ctx, llama_token_data_array * candidates, const void* filter_ptr);
+    LLAMA_API void llama_grammar_accept_token(struct llama_context * ctx, llama_token id, void* filter_ptr);
+
     // Print system information
     LLAMA_API const char * llama_print_system_info(void);
 
